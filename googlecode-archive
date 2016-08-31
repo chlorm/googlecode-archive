@@ -291,6 +291,8 @@ GoogleCode::Repos() {
 GoogleCode::TarOutput() {
   local Name="${1}"
 
+  File::Remove "${OUTDIR}/${Name}.tar.xz"
+
   # Prevent full directory heirarchy from being included, use
   # a relative path.
   pushd "${OUTDIR}"
@@ -314,6 +316,20 @@ GoogleCode::Project() {
   GoogleCode::TarOutput "${Name}"
 }
 
+GoogleCode::Main() {
+  local Name="${1}"
+
+  # TCP connections could be dropped and it isn't worth implementing
+  # detection for this, so loop until the program succeeds.
+  while [ true ] ; do
+    GoogleCode::Project "${Name}" && {
+      false
+    }
+  done
+
+  return 0
+}
+
 #curl "${GSAPI}/${ABK}/${CGC}/${ProjectName}/project.json" | jq -r '' ; exit
 
 if [ -f "${1}" ] ; then
@@ -324,5 +340,7 @@ else
     Debug::Message 'error' "no input"
     exit 1
   }
-  GoogleCode::Project "${1}"
+  GoogleCode::Main "${1}"
 fi
+
+exit 0
