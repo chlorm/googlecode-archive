@@ -118,6 +118,7 @@ GoogleCode::Downloads.pages() {
     "${OUTDIR}/${Name}/downloads/downloads-page-${DownloadPageNum}.json"
 }
 
+# TODO: vailidate download against provided sha1 hash
 GoogleCode::Downloads() {
   local CCArgs1
   local CCArgs2
@@ -335,7 +336,6 @@ GoogleCode::Project() {
   GoogleCode::Downloads "${Name}"
   GoogleCode::Issues "${Name}"
   GoogleCode::Repos "${Name}"
-  # TODO: figure out is wiki data always exists in repo
   #GoogleCode::Wikis "${Name}"
 
   GoogleCode::TarOutput "${Name}"
