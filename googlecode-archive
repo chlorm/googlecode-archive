@@ -125,10 +125,21 @@ GoogleCode::Downloads() {
   local -a DownloadFiles
   local DownloadPages
   local Name="${1}"
+  local TestForInvalidKey
   local TMPDIR=`mktemp -d`
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-1.json" \
     -o "${TMPDIR}/downloads-page-1.json"
+
+  TestForInvalidKey="$(
+    cat "${TMPDIR}/downloads-page-1.json" |
+      grep -o 'The specified key does not exist.' || :
+  )"
+
+  # Exit if no downloads exists
+  if [ -n "${TestForInvalidKey}" ] ; then
+    return 0
+  fi
 
   DownloadPages="$(jq -r '.totalPages' "${TMPDIR}/downloads-page-1.json")"
 
@@ -218,6 +229,16 @@ GoogleCode::Issues() {
   TMPDIR="$(mktemp -d)"
 
   IssuesJson="$(curl ${CURL_ARGS[@]} "${NumPagesUrl}")"
+
+  TestForInvalidKey="$(
+    echo "${IssuesJson}" |
+      grep -o 'The specified key does not exist.' || :
+  )"
+
+  # Exit if no issues exists
+  if [ -n "${TestForInvalidKey}" ] ; then
+    return 0
+  fi
 
   NumIssues="$(echo "${IssuesJson}" | jq --raw-output 'first(.issues[].id)')"
   Debug::Message 'info' "number of issues: ${NumIssues}"
