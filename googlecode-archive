@@ -30,9 +30,13 @@
 
 # Dependencies:
 # bash >=5.2
+# coreutils
 # curl >=7.33.0
+# grep
 # jq
+# tar
 # unzip
+# xz
 
 # Notes:
 # - Issue pages are only duplicate metadata that can be re-generated
