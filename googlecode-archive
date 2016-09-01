@@ -75,7 +75,8 @@ DBK='google-code-archive-downloads'
 CGC='v2/code.google.com'
 
 # FIXME
-OUTDIR=`pwd`
+OUTDIRDEFAULT=`pwd`
+OUTDIR="${OUTDIR:-OUTDIRDEFAULT}"
 
 CONCURRENT_LIMIT='50'
 ENABLE_DEBUGGING='false'
