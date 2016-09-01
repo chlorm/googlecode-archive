@@ -29,7 +29,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 # Dependencies:
-# bash >=5.2
+# bash >=4.2
 # coreutils
 # curl >=7.33.0
 # grep
@@ -52,7 +52,8 @@ LIB_BASH="$(
         readlink -f "${0}"
       )"
     )"
-  )/vendor/lib-bash/src/share/lib-bash/lib.bash")"
+  )/vendor/lib-bash/src/share/lib-bash/lib.bash"
+)"
 
 if [ -f "${LIB_BASH}" ] ; then
   source "${LIB_BASH}"
@@ -74,10 +75,10 @@ DBK='google-code-archive-downloads'
 # API
 CGC='v2/code.google.com'
 
-# FIXME
 OUTDIRDEFAULT=`pwd`
-OUTDIR="${OUTDIR:-OUTDIRDEFAULT}"
+OUTDIR="${OUTDIR:-${OUTDIRDEFAULT}}"
 
+CONCURRENT_COMPACT='true'
 CONCURRENT_LIMIT='50'
 ENABLE_DEBUGGING='false'
 
@@ -95,86 +96,88 @@ CURL_ARGS=(
 
 GoogleCode::Downloads.file() {
   local DownloadFile="${2}"
-  local DownloadFilesUrl="${GSAPI}/${DBK}/${CGC}/${Name}"
   local Name="${1}"
 
-  curl ${CURL_ARGS[@]} "${DownloadFilesUrl}/${DownloadFile}" \
+  curl ${CURL_ARGS[@]} "${GSAPI}/${DBK}/${CGC}/${Name}/${DownloadFile}" \
     -o "${OUTDIR}/${Name}/downloads/${DownloadFile}"
 
-  GoogleCode::InvalidKey \
+  GoogleCode::InvalidKey.rm \
     "${OUTDIR}/${Name}/downloads/${DownloadFile}"
 }
 
 GoogleCode::Downloads.pages() {
   local DownloadPageNum="${2}"
-  local DownloadPagesUrl="${GSAPI}/${ABK}/${CGC}/${Name}"
   local Name="${1}"
 
   Directory::Remove "${OUTDIR}/${Name}/downloads"
   Directory::Create "${OUTDIR}/${Name}/downloads"
 
   curl ${CURL_ARGS[@]} \
-    "${DownloadPagesUrl}/downloads-page-${DownloadPageNum}.json" \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-${DownloadPageNum}.json" \
     -o "${OUTDIR}/${Name}/downloads/downloads-page-${DownloadPageNum}.json"
 
-  GoogleCode::InvalidKey \
+  GoogleCode::InvalidKey.rm \
     "${OUTDIR}/${Name}/downloads/downloads-page-${DownloadPageNum}.json"
 }
 
 # TODO: vailidate download against provided sha1 hash
 GoogleCode::Downloads() {
-  local CCArgs1
-  local CCArgs2
+  local -a CCArgs1
+  local -a CCArgs2
   local DownloadFile
   local -a DownloadFiles
   local DownloadPages
   local Name="${1}"
   local TestForInvalidKey
-  local TMPDIR=`mktemp -d`
+  local TMPDIR
+
+  TMPDIR=`mktemp -d`
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-1.json" \
     -o "${TMPDIR}/downloads-page-1.json"
 
-  TestForInvalidKey="$(
-    cat "${TMPDIR}/downloads-page-1.json" |
-      grep -o 'The specified key does not exist.' || :
-  )"
+  GoogleCode::InvalidKey "${TMPDIR}/downloads-page-1.json" || return 0
 
-  # Exit if no downloads exists
-  if [ -n "${TestForInvalidKey}" ] ; then
-    return 0
-  fi
-
-  DownloadPages="$(jq -r '.totalPages' "${TMPDIR}/downloads-page-1.json")"
+  DownloadPages="$(jq -r -c -M '.totalPages' "${TMPDIR}/downloads-page-1.json")"
 
   for i in `seq 1 ${DownloadPages}` ; do
     CCArgs1+=(
-      '-' "fetching: downloads-page-${i}.json"
-      GoogleCode::Downloads.pages "${Name}" "${i}"
+      '-'
+      "fetching: downloads-page-${i}.json"
+      GoogleCode::Downloads.pages
+        "${Name}"
+        "${i}"
     )
   done
+
+  GoogleCode::Step 'fetching download pages'
 
   concurrent "${CCArgs1[@]}"
 
   while read DownloadPageFile ; do
-    Debug::Message 'info' "${DownloadPageFile}"
     while read DownloadFile ; do
       DownloadFiles+=("${DownloadFile}")
-    done < <(jq -r '.downloads[].filename' "${DownloadPageFile}")
+    done < <(jq -r -c -M '.downloads[].filename' "${DownloadPageFile}")
   done < <(find "${OUTDIR}"/"${Name}"/downloads -type f -name '*.json')
 
   for i in "${DownloadFiles[@]}" ; do
     CCArgs2+=(
-      '-' "fetching download: ${i}"
-      GoogleCode::Downloads.file "${Name}" "${i}"
+      '-'
+      "fetching download: ${i}"
+      GoogleCode::Downloads.file
+        "${Name}"
+        "${i}"
     )
   done
+
+  GoogleCode::Step 'fetching downloads'
 
   concurrent "${CCArgs2[@]}"
 }
 
+# Return 1 if key is invalid
 GoogleCode::InvalidKey() {
-  local File="{1}"
+  local File="${1}"
   local TestForInvalidKey
 
   TestForInvalidKey="$(
@@ -183,138 +186,156 @@ GoogleCode::InvalidKey() {
   )"
 
   if [ -n "${TestForInvalidKey}" ] ; then
-    rm "${File}"
+    return 1
   fi
 }
 
+GoogleCode::InvalidKey.rm() {
+  local File="${1}"
+
+  GoogleCode::InvalidKey "${File}" || rm "${File}"
+}
+
 GoogleCode::Issues.attachment() {
-  local Filename="${4}"
+  local File="${4}"
   local IssueCommentNum="${3}"
   local IssueNum="${2}"
   local Name="${1}"
-  local IssueCommentAttachmentUrl="${GSAPI}/${ATBK}/${Name}"
 
   Directory::Remove "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}"
   Directory::Create "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}"
 
-  Debug::Message 'info' "fetching issue=${IssueNum}, comment=${IssueCommentNum} attachment: ${Attachment}"
-  Debug::Message 'info' "attachment url: ${IssuesUrl}/${Filename}"
-  curl ${CURL_ARGS[@]} "${IssueCommentAttachmentUrl}/${Filename}" \
-    -o "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${Filename}"
+  curl ${CURL_ARGS[@]} "${GSAPI}/${ATBK}/${Name}/${File}" \
+    -o "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${File}"
 
-  GoogleCode::InvalidKey \
-    "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${Filename}"
+  GoogleCode::InvalidKey.rm \
+    "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${File}"
 }
 
 GoogleCode::Issues.issue() {
   local IssueNum="${2}"
-  local IssuesUrl="${GSAPI}/${ABK}/${CGC}/${Name}/issues"
   local Name="${1}"
 
   Directory::Remove "${OUTDIR}/${Name}/issues/${IssueNum}/"
   Directory::Create "${OUTDIR}/${Name}/issues/${IssueNum}/"
 
-  Debug::Message 'info' "fetching issue: ${IssueNum}"
-  curl ${CURL_ARGS[@]} "${IssuesUrl}/issue-${IssueNum}.json" \
-    -o "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueNum}.json"
+  curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/issues/issue-${IssueNum}.json" \
+    -o "${OUTDIR}/${Name}/issues/${IssueNum}/issue-${IssueNum}.json"
 
-  GoogleCode::InvalidKey \
-    "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueNum}.json"
+  GoogleCode::InvalidKey.rm \
+    "${OUTDIR}/${Name}/issues/${IssueNum}/issue-${IssueNum}.json"
 }
 
 GoogleCode::Issues() {
-  local -a CCArgs
+  local Attachment
+  local -a Attachments
+  local -a CCArgs1
+  local -a CCArgs2
+  local IssueCommentNum
+  local IssueNum
   local -a IssuePagesArray
   local Name="${1}"
-  local NumPages
-  local NumPagesUrl="${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-1.json"
+  local NumIssues
   local TMPDIR
 
-  TMPDIR="$(mktemp -d)"
+  TMPDIR=`mktemp -d`
 
-  IssuesJson="$(curl ${CURL_ARGS[@]} "${NumPagesUrl}")"
+  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-1.json" \
+    -o "${TMPDIR}/issues.json"
 
-  TestForInvalidKey="$(
-    echo "${IssuesJson}" |
-      grep -o 'The specified key does not exist.' || :
-  )"
+  GoogleCode::InvalidKey "${TMPDIR}/issues.json" || return 0
 
-  # Exit if no issues exists
-  if [ -n "${TestForInvalidKey}" ] ; then
-    return 0
-  fi
-
-  NumIssues="$(echo "${IssuesJson}" | jq --raw-output 'first(.issues[].id)')"
-  Debug::Message 'info' "number of issues: ${NumIssues}"
+  NumIssues="$(jq -r -c -M 'first(.issues[].id)' "${TMPDIR}/issues.json")"
 
   Var::Type.integer "${NumIssues}"
 
   for i in `seq 1 ${NumIssues}` ; do
-    CCArgs+=('-' "fetching issue: ${i}" GoogleCode::Issues.issue "${Name}" "${i}")
+    CCArgs1+=(
+      '-' "fetching issue: ${i}" GoogleCode::Issues.issue "${Name}" "${i}"
+    )
   done
 
-  concurrent "${CCArgs[@]}"
+  GoogleCode::Step 'fetching issues'
 
-  unset CCArgs
+  concurrent "${CCArgs1[@]}"
+
+  GoogleCode::Step 'compiling list of attachments'
 
   while read IssueFile ; do
-    TestForInvalidKey="$(
-      cat "${IssueFile}" |
-        grep -o 'The specified key does not exist.' || :
-    )"
-    if [ -n "${TestForInvalidKey}" ] ; then
+    GoogleCode::InvalidKey "${IssueFile}" || {
       rm "${IssueFile}"
       continue
-    fi
+    }
 
     IssueNum="$(jq -r -c -M '.id' "${IssueFile}")"
-    Debug::Message 'info' "issue number: ${IssueNum}"
     Var::Type.integer "${IssueNum}"
 
-    jq -r -c '.comments' "${IssueFile}" > "${TMPDIR}/IssueCommentJson"
-    #Debug::Message 'info' "comment json: $(cat "${TMPDIR}/IssueCommentJson")"
+    jq -r -c -M '.comments' "${IssueFile}" > "${TMPDIR}/IssueCommentJson"
 
     while read IssueCommentNum ; do
-      Debug::Message 'info' "issue comment number: ${IssueCommentNum}"
       Var::Type.integer "${IssueCommentNum}"
 
       jq -r -c -M ".[]|select(.id | contains(${IssueCommentNum}))|.attachments" \
         "${TMPDIR}/IssueCommentJson" > \
         "${TMPDIR}/IssueAttachmentsJson"
-      Debug::Message 'info' "attachment json: $(cat "${TMPDIR}/IssueAttachmentsJson")"
 
       while read IssueAttachmentFile ; do
-        IssueAttachmentFilenames+=("${IssueAttachmentFile}")
+        Attachments+=("${IssueAttachmentFile}")
       done < <(jq -r -c -M '.[]|.fileName' "${TMPDIR}/IssueAttachmentsJson")
 
-      for IssueAttachmentFilename in "${IssueAttachmentFilenames[@]}" ; do
-        if [ -n "${IssueAttachmentFilename}" ] ; then
-          Debug::Message 'info' "attachment filename: ${IssueAttachmentFilename}"
-          CCArgs+=(
-            '-' "fetching issue: ${IssueNum}, comment: ${IssueCommentNum} attachment: ${IssueAttachmentFilename}"
-            GoogleCode::Issues.attachment "${Name}" "${IssueNum}" "${IssueCommentNum}" "${IssueAttachmentFilename}"
-          )
-        fi
+      for Attachment in "${Attachments[@]}" ; do
+        CCArgs2+=(
+          '-'
+          "fetching issue: ${IssueNum}, comment: ${IssueCommentNum}, attachment: ${Attachment}"
+          GoogleCode::Issues.attachment
+            "${Name}"
+            "${IssueNum}"
+            "${IssueCommentNum}"
+            "${Attachment}"
+        )
       done
-      unset IssueAttachmentFilenames
+      unset Attachments
     done < <(jq -r -c -M '.[]|.id' "${TMPDIR}/IssueCommentJson")
-  done < <(find "${OUTDIR}"/"${Name}"/issues -type f -name '*.json')
+  done < <(find "${OUTDIR}/${Name}/issues" -type f -name '*.json')
 
-  concurrent "${CCArgs[@]}"
+  GoogleCode::Step 'fetching issue attachements'
+
+  concurrent "${CCArgs2[@]}"
+}
+
+GoogleCode::Logo() {
+  local Name="${1}"
+
+  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/logo.png" \
+    -o "${OUTDIR}/${Name}/logo.png"
+
+  GoogleCode::InvalidKey.rm "${OUTDIR}/${Name}/logo.png"
 }
 
 # TODO: add support for sub repos, requires parsing project.json
+# FIXME: check hasSource from project.json
 GoogleCode::Repos() {
   local Name="${1}"
-  local TMPDIR=`mktemp -d`
+  local TMPDIR
+
+  TMPDIR=`mktemp -d`
 
   Directory::Remove "${OUTDIR}/${Name}/repo/"
   Directory::Create "${OUTDIR}/${Name}/repo/"
+
+  GoogleCode::Step 'fetching source code archive'
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ASBK}/${CGC}/${Name}/source-archive.zip" \
     -o "${TMPDIR}/source-archive.zip"
 
   unzip -q "${TMPDIR}/source-archive.zip" -d "${OUTDIR}/${Name}/repo/"
+}
+
+GoogleCode::Step() {
+  local Step="${1}"
+
+  echo "########## ${Step} ##########">&1
 }
 
 GoogleCode::TarOutput() {
@@ -331,16 +352,77 @@ GoogleCode::TarOutput() {
   Directory::Remove "${OUTDIR}/${Name}"
 }
 
+GoogleCode::Wikis() {
+  local -a CCArgs
+  local Name="${1}"
+  local TMPDIR
+  local WikiFile
+  local -a WikiFiles
+
+  TMPDIR=`mktemp -d`
+
+  echo "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json"
+
+  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json" \
+    -o "${TMPDIR}/wikis.json"
+
+  GoogleCode::InvalidKey "${TMPDIR}/wikis.json" || return 0
+
+  while read WikiFile ; do
+    # Remove leading slash
+    WikiFile="$(echo "${WikiFile}" | sed -e 's,^/,,')"
+    echo "${GSAPI}/${ABK}/${CGC}/${Name}/wikis/${WikiFile}"
+    WikiFiles+=("${WikiFile}")
+  done < <(jq -r '.WikiFiles[]' "${TMPDIR}/wikis.json")
+
+  for i in "${WikiFiles[@]}" ; do
+    CCArgs+=(
+      '-'
+      "fetching wiki page: ${i}"
+      GoogleCode::Wikis.page
+        "${Name}"
+        "${i}"
+    )
+  done
+
+  GoogleCode::Step 'fetching wiki pages'
+
+  concurrent "${CCArgs[@]}"
+}
+
+GoogleCode::Wikis.page() {
+  local Name="${1}"
+  local File="${2}"
+
+  Directory::Remove "${OUTDIR}/${Name}/wikis/"
+  Directory::Create "${OUTDIR}/${Name}/wikis/"
+
+  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}" \
+    -o "${OUTDIR}/wikis/${File}"
+
+  GoogleCode::InvalidKey.rm "${OUTDIR}/wikis/${File}"
+}
+
 GoogleCode::Project() {
   local Name="${1}"
 
   Directory::Remove "${OUTDIR}/${Name}"
 
+  GoogleCode::Step "checking for downloads"
   GoogleCode::Downloads "${Name}"
-  GoogleCode::Issues "${Name}"
-  GoogleCode::Repos "${Name}"
-  #GoogleCode::Wikis "${Name}"
 
+  GoogleCode::Step "checking for issues"
+  GoogleCode::Issues "${Name}"
+
+  GoogleCode::Step 'fetching logo'
+  GoogleCode::Logo "${Name}"
+
+  GoogleCode::Repos "${Name}"
+
+  GoogleCode::Step 'checking for wikis'
+  GoogleCode::Wikis "${Name}"
+
+  GoogleCode::Step 'tarring output'
   GoogleCode::TarOutput "${Name}"
 }
 
@@ -357,8 +439,6 @@ GoogleCode::Main() {
 
   return 0
 }
-
-#curl "${GSAPI}/${ABK}/${CGC}/${ProjectName}/project.json" | jq -r '' ; exit
 
 if [ -f "${1}" ] ; then
   # TODO: support reading in file
