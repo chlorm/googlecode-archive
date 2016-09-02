@@ -350,11 +350,17 @@ GoogleCode::TarOutput() {
 
   File::Remove "${OUTDIR}/${Name}.tar.xz"
 
+  # Don't tar an empty directory
+  [ "$(du -b "${OUTDIR}/${Name}" | awk '{print $1;exit}')" != '0' ] || {
+    Directory::Remove "${OUTDIR}/${Name}"
+    return 0
+  }
+
   # Prevent full directory heirarchy from being included, use
   # a relative path.
-  pushd "${OUTDIR}"
+  pushd "${OUTDIR}" > /dev/null
     tar -cf - "${Name}" | xz -9 -c - > "${Name}.tar.xz"
-  popd
+  popd > /dev/null
 
   Directory::Remove "${OUTDIR}/${Name}"
 }
