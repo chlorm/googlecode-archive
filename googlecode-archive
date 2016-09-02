@@ -73,7 +73,9 @@ ASBK='google-code-archive-source'
 ATBK='google-code-attachments'
 DBK='google-code-archive-downloads'
 # API
-CGC='v2/code.google.com'
+# 'v2/apache-extras.org'
+# 'v2/eclipselabs.org'
+CGC="${API:-v2/code.google.com}"
 
 OUTDIRDEFAULT=`pwd`
 OUTDIR="${OUTDIR:-${OUTDIRDEFAULT}}"
