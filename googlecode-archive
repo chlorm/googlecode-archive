@@ -66,23 +66,23 @@ else
 fi
 
 # URL
-GSAPI='https://storage.googleapis.com'
+declare -r GSAPI='https://storage.googleapis.com'
 # Buckets
-ABK='google-code-archive'
-ASBK='google-code-archive-source'
-ATBK='google-code-attachments'
-DBK='google-code-archive-downloads'
+declare -r ABK='google-code-archive'
+declare -r ASBK='google-code-archive-source'
+declare -r ATBK='google-code-attachments'
+declare -r DBK='google-code-archive-downloads'
 # API
 # 'v2/apache-extras.org'
 # 'v2/eclipselabs.org'
-CGC="${API:-v2/code.google.com}"
+declare -r CGC="${API:-v2/code.google.com}"
 
-OUTDIRDEFAULT=`pwd`
-OUTDIR="${OUTDIR:-${OUTDIRDEFAULT}}"
+declare -r OUTDIRDEFAULT=`pwd`
+declare -r OUTDIR="${OUTDIR:-${OUTDIRDEFAULT}}"
 
 CONCURRENT_COMPACT='true'
 CONCURRENT_LIMIT='50'
-ENABLE_DEBUGGING='false'
+declare -r ENABLE_DEBUGGING='false'
 
 CURL_ARGS=(
   '--continue-at -'
@@ -92,13 +92,15 @@ CURL_ARGS=(
   '--max-redirs 20'
   '--speed-limit 10240'
   '--speed-time 10'
-  '--retry 3'
+  '--retry 32'
   '--retry-delay 5'
 )
 
+echo ${CURL_ARGS[@]}
+
 GoogleCode::Downloads.file() {
-  local DownloadFile="${2}"
-  local Name="${1}"
+  local -r DownloadFile="${2}"
+  local -r Name="${1}"
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${DBK}/${CGC}/${Name}/${DownloadFile}" \
     -o "${OUTDIR}/${Name}/downloads/${DownloadFile}"
@@ -108,8 +110,8 @@ GoogleCode::Downloads.file() {
 }
 
 GoogleCode::Downloads.pages() {
-  local DownloadPageNum="${2}"
-  local Name="${1}"
+  local -r DownloadPageNum="${2}"
+  local -r Name="${1}"
 
   Directory::Create "${OUTDIR}/${Name}/downloads"
 
@@ -178,7 +180,7 @@ GoogleCode::Downloads() {
 
 # Return 1 if key is invalid
 GoogleCode::InvalidKey() {
-  local File="${1}"
+  local -r File="${1}"
   local TestForInvalidKey
 
   TestForInvalidKey="$(
@@ -192,16 +194,16 @@ GoogleCode::InvalidKey() {
 }
 
 GoogleCode::InvalidKey.rm() {
-  local File="${1}"
+  local -r File="${1}"
 
   GoogleCode::InvalidKey "${File}" || rm "${File}"
 }
 
 GoogleCode::Issues.attachment() {
-  local File="${4}"
-  local IssueCommentNum="${3}"
-  local IssueNum="${2}"
-  local Name="${1}"
+  local -r File="${4}"
+  local -r IssueCommentNum="${3}"
+  local -r IssueNum="${2}"
+  local -r Name="${1}"
 
   Directory::Create "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}"
 
@@ -300,6 +302,8 @@ GoogleCode::Issues() {
 
   GoogleCode::Step 'fetching issue attachements'
 
+  [ ${#CCArgs2[@]} -ge 1 ] || return 0
+
   concurrent "${CCArgs2[@]}"
 }
 
@@ -317,7 +321,8 @@ GoogleCode::Logo() {
 # TODO: add support for sub repos, requires parsing project.json
 # FIXME: check hasSource from project.json
 GoogleCode::Repos() {
-  local Name="${1}"
+  local -r Name="${1}"
+  local HasSource
   local TMPDIR
 
   TMPDIR=`mktemp -d`
@@ -340,13 +345,13 @@ GoogleCode::Repos() {
 }
 
 GoogleCode::Step() {
-  local Step="${1}"
+  local -r Step="${1}"
 
   echo "########## ${Step} ##########">&1
 }
 
 GoogleCode::TarOutput() {
-  local Name="${1}"
+  local -r Name="${1}"
 
   File::Remove "${OUTDIR}/${Name}.tar.xz"
 
@@ -367,7 +372,7 @@ GoogleCode::TarOutput() {
 
 GoogleCode::Wikis() {
   local -a CCArgs
-  local Name="${1}"
+  local -r Name="${1}"
   local TMPDIR
   local WikiFile
   local -a WikiFiles
@@ -390,14 +395,19 @@ GoogleCode::Wikis() {
   done < <(jq -r '.WikiFiles[]' "${TMPDIR}/wikis.json")
 
   for i in "${WikiFiles[@]}" ; do
-    CCArgs+=(
-      '-'
-      "fetching wiki page: ${i}"
-      GoogleCode::Wikis.page
-        "${Name}"
-        "${i}"
-    )
+    if [ -n "${i}" ] ; then
+      CCArgs+=(
+        '-'
+        "fetching wiki page: ${i}"
+        GoogleCode::Wikis.page
+          "${Name}"
+          "${i}"
+      )
+    fi
   done
+
+  echo "${CCArgs[@]}"
+  [ ${#CCArgs[@]} -ge 1 ] || return 0
 
   GoogleCode::Step 'fetching wiki pages'
 
@@ -405,19 +415,19 @@ GoogleCode::Wikis() {
 }
 
 GoogleCode::Wikis.page() {
-  local Name="${1}"
-  local File="${2}"
+  local -r Name="${1}"
+  local -r File="${2}"
 
-  Directory::Create "${OUTDIR}/${Name}/wikis/"
+  Directory::Create "${OUTDIR}/${Name}/wikis/$(dirname "${File}" | sed -e 's/^.//')"
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}" \
-    -o "${OUTDIR}/wikis/${File}"
+    -o "${OUTDIR}/${Name}/wikis/${File}"
 
   GoogleCode::InvalidKey.rm "${OUTDIR}/wikis/${File}"
 }
 
 GoogleCode::Project() {
-  local Name="${1}"
+  local -r Name="${1}"
 
   Directory::Remove "${OUTDIR}/${Name}"
 
@@ -440,7 +450,7 @@ GoogleCode::Project() {
 }
 
 GoogleCode::Main() {
-  local Name="${1}"
+  local -r Name="${1}"
 
   # TCP connections could be dropped and it isn't worth implementing
   # detection for this, so loop until the program succeeds.
