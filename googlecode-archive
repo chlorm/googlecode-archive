@@ -322,6 +322,13 @@ GoogleCode::Repos() {
 
   TMPDIR=`mktemp -d`
 
+  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/project.json" \
+    -o "${TMPDIR}/project.json"
+
+  HasSource="$(jq -r -c -M '.hasSource' "${TMPDIR}/project.json")"
+
+  [ "${HasSource}" == 'true' ] || return 0
+
   Directory::Create "${OUTDIR}/${Name}/repo/"
 
   GoogleCode::Step 'fetching source code archive'
