@@ -374,17 +374,18 @@ GoogleCode::Wikis() {
 
   TMPDIR=`mktemp -d`
 
-  echo "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json"
-
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json" \
     -o "${TMPDIR}/wikis.json"
 
   GoogleCode::InvalidKey "${TMPDIR}/wikis.json" || return 0
 
+  # Make sure not to interate over null
+  [ -z "$(cat "${TMPDIR}/wikis.json" |
+          grep -o '{"WikiFiles":null}' || :)" ] || return 0
+
   while read WikiFile ; do
     # Remove leading slash
     WikiFile="$(echo "${WikiFile}" | sed -e 's,^/,,')"
-    echo "${GSAPI}/${ABK}/${CGC}/${Name}/wikis/${WikiFile}"
     WikiFiles+=("${WikiFile}")
   done < <(jq -r '.WikiFiles[]' "${TMPDIR}/wikis.json")
 
