@@ -111,7 +111,6 @@ GoogleCode::Downloads.pages() {
   local DownloadPageNum="${2}"
   local Name="${1}"
 
-  Directory::Remove "${OUTDIR}/${Name}/downloads"
   Directory::Create "${OUTDIR}/${Name}/downloads"
 
   curl ${CURL_ARGS[@]} \
@@ -204,7 +203,6 @@ GoogleCode::Issues.attachment() {
   local IssueNum="${2}"
   local Name="${1}"
 
-  Directory::Remove "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}"
   Directory::Create "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}"
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ATBK}/${Name}/${File}" \
@@ -218,7 +216,6 @@ GoogleCode::Issues.issue() {
   local IssueNum="${2}"
   local Name="${1}"
 
-  Directory::Remove "${OUTDIR}/${Name}/issues/${IssueNum}/"
   Directory::Create "${OUTDIR}/${Name}/issues/${IssueNum}/"
 
   curl ${CURL_ARGS[@]} \
@@ -323,7 +320,6 @@ GoogleCode::Repos() {
 
   TMPDIR=`mktemp -d`
 
-  Directory::Remove "${OUTDIR}/${Name}/repo/"
   Directory::Create "${OUTDIR}/${Name}/repo/"
 
   GoogleCode::Step 'fetching source code archive'
@@ -396,7 +392,6 @@ GoogleCode::Wikis.page() {
   local Name="${1}"
   local File="${2}"
 
-  Directory::Remove "${OUTDIR}/${Name}/wikis/"
   Directory::Create "${OUTDIR}/${Name}/wikis/"
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}" \
