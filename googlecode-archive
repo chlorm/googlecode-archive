@@ -306,6 +306,8 @@ GoogleCode::Issues() {
 GoogleCode::Logo() {
   local Name="${1}"
 
+  Directory::Create "${OUTDIR}/${Name}"
+
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/logo.png" \
     -o "${OUTDIR}/${Name}/logo.png"
 
