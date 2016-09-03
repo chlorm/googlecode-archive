@@ -230,6 +230,20 @@ GoogleCode::Issues.issue() {
     "${OUTDIR}/${Name}/issues/${IssueNum}/issue-${IssueNum}.json"
 }
 
+GoogleCode::Issues.page() {
+  local Name="${1}"
+  local PageNum="${2}"
+
+  Directory::Create "${OUTDIR}/${Name}/issues/"
+
+  curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-${PageNum}.json" \
+    -o "${OUTDIR}/${Name}/issues/issues-page-${PageNum}.json"
+
+  GoogleCode::InvalidKey.rm \
+    "${OUTDIR}/${Name}/issues/issues-page-${PageNum}.json"
+}
+
 GoogleCode::Issues() {
   local Attachment
   local -a Attachments
@@ -240,6 +254,7 @@ GoogleCode::Issues() {
   local -a IssuePagesArray
   local Name="${1}"
   local NumIssues
+  local NumPages
   local TMPDIR
 
   TMPDIR=`mktemp -d`
@@ -250,12 +265,19 @@ GoogleCode::Issues() {
   GoogleCode::InvalidKey "${TMPDIR}/issues.json" || return 0
 
   NumIssues="$(jq -r -c -M 'first(.issues[].id)' "${TMPDIR}/issues.json")"
+  NumPages="$(jq -r -c -M '.totalPages' "${TMPDIR}/issues.json")"
 
   Var::Type.integer "${NumIssues}"
 
   for i in `seq 1 ${NumIssues}` ; do
     CCArgs1+=(
       '-' "fetching issue: ${i}" GoogleCode::Issues.issue "${Name}" "${i}"
+    )
+  done
+
+  for i in `seq 1 ${NumPages}` ; do
+    CCArgs2+=(
+      '-' "fetching issue page: ${i}" GoogleCode::Issues.page "${Name}" "${i}"
     )
   done
 
