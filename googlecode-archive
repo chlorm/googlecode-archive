@@ -342,6 +342,17 @@ GoogleCode::Logo() {
   GoogleCode::InvalidKey.rm "${OUTDIR}/${Name}/logo.png"
 }
 
+GoogleCode::ProjectJson() {
+  local -r Name="${1}"
+
+  Directory::Create "${OUTDIR}/${Name}"
+
+  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/project.json" \
+    -o "${OUTDIR}/${Name}/project.json"
+
+  GoogleCode::InvalidKey.rm "${OUTDIR}/${Name}/project.json"
+}
+
 # TODO: add support for sub repos, requires parsing project.json
 # FIXME: check hasSource from project.json
 GoogleCode::Repos() {
@@ -351,10 +362,7 @@ GoogleCode::Repos() {
 
   TMPDIR=`mktemp -d`
 
-  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/project.json" \
-    -o "${TMPDIR}/project.json"
-
-  HasSource="$(jq -r -c -M '.hasSource' "${TMPDIR}/project.json")"
+  HasSource="$(jq -r -c -M '.hasSource' "${OUTDIR}/${Name}/project.json")"
 
   [ "${HasSource}" == 'true' ] || return 0
 
@@ -505,7 +513,11 @@ GoogleCode::Wikis.page() {
 GoogleCode::Project() {
   local -r Name="${1}"
 
+  # Incase file were left from a previous run remove them to prevent
+  # unwanted files.
   Directory::Remove "${OUTDIR}/${Name}"
+
+  GoogleCode::ProjectJson "${Name}"
 
   GoogleCode::Step "checking for downloads"
   GoogleCode::Downloads "${Name}"
