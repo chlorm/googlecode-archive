@@ -208,7 +208,8 @@ GoogleCode::Issues.attachment() {
 
   Directory::Create "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}"
 
-  curl ${CURL_ARGS[@]} "${GSAPI}/${ATBK}/${Name}/${File}" \
+  curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ATBK}/${Name}/issue-${IssueNum}/comment-${IssueCommentNum}/${File}" \
     -o "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${File}"
 
   GoogleCode::InvalidKey.rm \
