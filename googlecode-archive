@@ -42,7 +42,10 @@
 # Notes:
 # - Issue pages are only duplicate metadata that can be re-generated
 #   from the issues themselves.
-# - Issue API is incorrectly documented.
+# - There are cases where files (such as attachments) are listed in
+#   various json metadata files, however the may not exist in the
+#   googlecode archive.  They may have been removed before googlecode
+#   became read only, but I don't know for sure.
 
 set -o pipefail
 
@@ -448,7 +451,13 @@ GoogleCode::TarOutput() {
   # Prevent full directory heirarchy from being included, use
   # a relative path.
   pushd "${OUTDIR}" > /dev/null
-    tar -cf - "${Name}" | xz -9 -c - > "${Name}.tar.xz"
+    tar -cf - "${Name}" |
+      xz \
+        -9 \
+        --compress \
+        --extreme \
+        --threads $(Cpu::Logical) \
+        - > "${Name}.tar.xz"
   popd > /dev/null
 
   Directory::Remove "${OUTDIR}/${Name}"
@@ -490,7 +499,6 @@ GoogleCode::Wikis() {
     fi
   done
 
-  echo "${CCArgs[@]}"
   [ ${#CCArgs[@]} -ge 1 ] || return 0
 
   GoogleCode::Step 'fetching wiki pages'
