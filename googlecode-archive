@@ -36,6 +36,7 @@
 # jq
 # tar
 # unzip
+# xargs
 # xz
 
 # Notes:
@@ -344,6 +345,60 @@ GoogleCode::Repos() {
   unzip -q "${TMPDIR}/source-archive.zip" -d "${OUTDIR}/${Name}/repo/"
 }
 
+GoogleCode::RemoveEmpty() {
+  local Directory
+  local -a Directories
+  local IconSize
+  local -r Name="${1}"
+  local OutDirSize
+  local ProjectJsonSize
+  local TotalBytes
+
+  sizeOf() {
+    local -r Input="${1}"
+    du -bs "${Input}" | awk '{print $1;exit}'
+  }
+
+  isEmpty() {
+    local -r Dir="${1}"
+    [ $(sizeOf "${Dir}") -eq 0 ] && return 0
+    return 1
+  }
+
+  if [ -f "${OUTDIR}/${Name}/logo.png" ] ; then
+    IconSize=$(sizeOf "${OUTDIR}/${Name}/logo.png")
+  fi
+  OutDirSize=$(sizeOf "${OUTDIR}/${Name}")
+  ProjectJsonSize=$(sizeOf "${OUTDIR}/${Name}/project.json")
+  TotalBytes=$(( ${OutDirSize} - ${ProjectJsonSize} ${IconSize:+- ${IconSize}} ))
+  # If the total number of bytes after subtracting logo,png & project.json
+  # is less than 200 assume the project is empty an don't archive it.
+  [ ${TotalBytes} -lt 200 ] && {
+    Directory::Remove "${OUTDIR}/${Name}"
+    return 1
+  }
+
+  while read Directory ; do
+    if isEmpty "${Directory}" ; then
+      # Don't risk collapsing VCS directories
+      if [[ ! "${Directory}" =~ "${OUTDIR}/${Name}/repo"/* ]] ; then
+        Directories+=("${Directory}")
+      fi
+    fi
+  done < <(find "${OUTDIR}/${Name}" -type d)
+
+  echo 'Removing empty directories:'
+  printf '%s\n' "${Directories[@]}"
+
+  # Sort directories by length, this works back up the directory
+  # structure to prevent removing a parent before a child.
+  echo "${Directories[@]}" |
+    awk '{ print length(), $0 | "sort -n -r" }' |
+    xargs rm -rf
+
+  return 0
+}
+
 GoogleCode::Step() {
   local -r Step="${1}"
 
@@ -355,11 +410,9 @@ GoogleCode::TarOutput() {
 
   File::Remove "${OUTDIR}/${Name}.tar.xz"
 
-  # Don't tar an empty directory
-  [ "$(du -b "${OUTDIR}/${Name}" | awk '{print $1;exit}')" != '0' ] || {
-    Directory::Remove "${OUTDIR}/${Name}"
-    return 0
-  }
+  # Before taring check that there is anything to tar and
+  # remove any empty directories.
+  GoogleCode::RemoveEmpty "${Name}" || return 0
 
   # Prevent full directory heirarchy from being included, use
   # a relative path.
