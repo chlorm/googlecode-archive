@@ -531,7 +531,7 @@ if [ -f "${1}" ] ; then
   :
 else
   [ -n "${1}" ] || {
-    Debug::Message 'error' "no input"
+    Log::Message 'error' "no input"
     exit 1
   }
   GoogleCode::Main "${1}"
