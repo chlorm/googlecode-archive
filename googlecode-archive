@@ -105,7 +105,7 @@ CURL_ARGS=(
   '--retry-delay 5'
   '--compressed'
   '--create-dirs'
-  # Ignore 403 pages from deleted files
+  # Restrict-View-* files are not contained in the archive and return 403.
   '--fail'
 )
 
@@ -115,9 +115,6 @@ GoogleCode::Downloads.file() {
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${DBK}/${CGC}/${Name}/${DownloadFile}" \
     -o "${OUTDIR}/${Name}/downloads/${DownloadFile}"
-
-  GoogleCode::InvalidKey.rm \
-    "${OUTDIR}/${Name}/downloads/${DownloadFile}"
 }
 
 GoogleCode::Downloads.pages() {
@@ -127,20 +124,15 @@ GoogleCode::Downloads.pages() {
   curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-${DownloadPageNum}.json" \
     -o "${OUTDIR}/${Name}/downloads/downloads-page-${DownloadPageNum}.json"
-
-  GoogleCode::InvalidKey.rm \
-    "${OUTDIR}/${Name}/downloads/downloads-page-${DownloadPageNum}.json"
 }
 
 # TODO: vailidate download against provided sha1 hash
 GoogleCode::Downloads() {
-  local -a CCArgs1
-  local -a CCArgs2
+  local -a CCArgs
   local DownloadFile
   local DownloadFiles
   local DownloadPages
   local Name="${1}"
-  local TestForInvalidKey
   local TMPDIR
 
   TMPDIR=`mktemp -d`
@@ -157,7 +149,7 @@ GoogleCode::Downloads() {
   DownloadPages="$(jq -r -c -M '.totalPages' "${TMPDIR}/downloads-page-1.json")"
 
   for i in `seq 1 ${DownloadPages}` ; do
-    CCArgs1+=(
+    CCArgs+=(
       '-'
       "fetching: downloads-page-${i}.json"
       GoogleCode::Downloads.pages
@@ -168,7 +160,7 @@ GoogleCode::Downloads() {
 
   GoogleCode::Step 'fetching download pages'
 
-  concurrent "${CCArgs1[@]}"
+  concurrent "${CCArgs[@]}"
 
   while read DownloadPageFile ; do
     while read DownloadFile ; do
@@ -180,29 +172,6 @@ GoogleCode::Downloads() {
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${DBK}/${CGC}/${Name}/\\{${DownloadFiles}\\}" \
     -o "${OUTDIR}/${Name}/downloads/#1"
-
-  #concurrent "${CCArgs2[@]}"
-}
-
-# Return 1 if key is invalid
-GoogleCode::InvalidKey() {
-  local -r File="${1}"
-  local TestForInvalidKey
-
-  TestForInvalidKey="$(
-    cat "${File}" |
-      grep -o 'The specified key does not exist.' || :
-  )"
-
-  if [ -n "${TestForInvalidKey}" ] ; then
-    return 1
-  fi
-}
-
-GoogleCode::InvalidKey.rm() {
-  local -r File="${1}"
-
-  GoogleCode::InvalidKey "${File}" || rm "${File}"
 }
 
 GoogleCode::Issues.attachment() {
@@ -214,9 +183,6 @@ GoogleCode::Issues.attachment() {
   curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ATBK}/${Name}/issue-${IssueNum}/comment-${IssueCommentNum}/${File}" \
     -o "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${File}"
-
-  GoogleCode::InvalidKey.rm \
-    "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${File}"
 }
 
 GoogleCode::Issues() {
@@ -239,7 +205,10 @@ GoogleCode::Issues() {
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-1.json" \
     -o "${TMPDIR}/issues.json"
 
-  GoogleCode::InvalidKey "${TMPDIR}/issues.json" || return 0
+  if [ ! -f "${TMPDIR}/issues.json" ] ; then
+    Log::Message 'info' 'project contains no issues'
+    return 0
+  fi
 
   NumIssues="$(jq -r -c -M 'first(.issues[].id)' "${TMPDIR}/issues.json")"
   NumPages="$(jq -r -c -M '.totalPages' "${TMPDIR}/issues.json")"
@@ -268,10 +237,9 @@ GoogleCode::Issues() {
   GoogleCode::Step 'compiling list of attachments'
 
   while read IssueFile ; do
-    GoogleCode::InvalidKey "${IssueFile}" || {
-      rm "${IssueFile}"
+    if [ ! -f "${IssueFile}" ] ; then
       continue
-    }
+    fi
 
     IssueNum="$(jq -r -c -M '.id' "${IssueFile}")"
     Var::Type.integer "${IssueNum}"
@@ -316,8 +284,6 @@ GoogleCode::Logo() {
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/logo.png" \
     -o "${OUTDIR}/${Name}/logo.png"
-
-  GoogleCode::InvalidKey.rm "${OUTDIR}/${Name}/logo.png"
 }
 
 GoogleCode::ProjectJson() {
@@ -325,8 +291,6 @@ GoogleCode::ProjectJson() {
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/project.json" \
     -o "${OUTDIR}/${Name}/project.json"
-
-  GoogleCode::InvalidKey.rm "${OUTDIR}/${Name}/project.json"
 }
 
 # TODO: add support for sub repos, requires parsing project.json
@@ -490,8 +454,6 @@ GoogleCode::Wikis.page() {
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}" \
     -o "${OUTDIR}/${Name}/wikis/${File}"
-
-  GoogleCode::InvalidKey.rm "${OUTDIR}/wikis/${File}"
 }
 
 GoogleCode::Project() {
