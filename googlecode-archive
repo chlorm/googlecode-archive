@@ -145,10 +145,14 @@ GoogleCode::Downloads() {
 
   TMPDIR=`mktemp -d`
 
+  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-1.json"
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-1.json" \
     -o "${TMPDIR}/downloads-page-1.json"
 
-  GoogleCode::InvalidKey "${TMPDIR}/downloads-page-1.json" || return 0
+  if [ ! -f "${TMPDIR}/downloads-page-1.json" ] ; then
+    Log::Message 'info' 'project has no downloads'
+    return 0
+  fi
 
   DownloadPages="$(jq -r -c -M '.totalPages' "${TMPDIR}/downloads-page-1.json")"
 
@@ -442,10 +446,14 @@ GoogleCode::Wikis() {
 
   TMPDIR=`mktemp -d`
 
+  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json"
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json" \
     -o "${TMPDIR}/wikis.json"
 
-  GoogleCode::InvalidKey "${TMPDIR}/wikis.json" || return 0
+  if [ ! -f "${TMPDIR}/wikis.json" ] ; then
+    Log::Message 'info' 'project contains no wikis'
+    return 0
+  fi
 
   # Make sure not to interate over null
   [ -z "$(cat "${TMPDIR}/wikis.json" |
