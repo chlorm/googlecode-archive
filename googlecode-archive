@@ -31,7 +31,7 @@
 # Dependencies:
 # bash >=4.2
 # coreutils
-# curl >=7.33.0
+# curl >=7.49.0 w/ OpenSSL & HTTP2
 # grep
 # jq
 # tar
@@ -46,6 +46,7 @@
 #   various json metadata files, however the may not exist in the
 #   googlecode archive.  They may have been removed before googlecode
 #   became read only, but I don't know for sure.
+
 
 set -o pipefail
 
@@ -91,16 +92,22 @@ declare -r ENABLE_DEBUGGING='false'
 CURL_ARGS=(
   '--continue-at -'
   '--http2'
+  '--http2-prior-knowledge'
   '--ssl-reqd'
   '--tlsv1.2'
-  '--max-redirs 20'
+  '--ciphers ECDHE-RSA-AES256-GCM-SHA384'
+  '--proto -all,https'
+  '--proto-redir -all,https'
+  '--max-redirs 0'
   '--speed-limit 10240'
   '--speed-time 10'
-  '--retry 32'
+  '--retry 3'
   '--retry-delay 5'
+  '--compressed'
+  '--create-dirs'
+  # Ignore 403 pages from deleted files
+  '--fail'
 )
-
-echo ${CURL_ARGS[@]}
 
 GoogleCode::Downloads.file() {
   local -r DownloadFile="${2}"
@@ -117,8 +124,6 @@ GoogleCode::Downloads.pages() {
   local -r DownloadPageNum="${2}"
   local -r Name="${1}"
 
-  Directory::Create "${OUTDIR}/${Name}/downloads"
-
   curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-${DownloadPageNum}.json" \
     -o "${OUTDIR}/${Name}/downloads/downloads-page-${DownloadPageNum}.json"
@@ -132,7 +137,7 @@ GoogleCode::Downloads() {
   local -a CCArgs1
   local -a CCArgs2
   local DownloadFile
-  local -a DownloadFiles
+  local DownloadFiles
   local DownloadPages
   local Name="${1}"
   local TestForInvalidKey
@@ -163,23 +168,16 @@ GoogleCode::Downloads() {
 
   while read DownloadPageFile ; do
     while read DownloadFile ; do
-      DownloadFiles+=("${DownloadFile}")
+      DownloadFiles="${DownloadFiles}${DownloadFiles:+,}${DownloadFile}"
     done < <(jq -r -c -M '.downloads[].filename' "${DownloadPageFile}")
-  done < <(find "${OUTDIR}"/"${Name}"/downloads -type f -name '*.json')
-
-  for i in "${DownloadFiles[@]}" ; do
-    CCArgs2+=(
-      '-'
-      "fetching download: ${i}"
-      GoogleCode::Downloads.file
-        "${Name}"
-        "${i}"
-    )
-  done
+  done < <(find "${OUTDIR}/${Name}/downloads" -type f -name '*downloads-page*.json')
 
   GoogleCode::Step 'fetching downloads'
 
-  concurrent "${CCArgs2[@]}"
+  curl ${CURL_ARGS[@]} "${GSAPI}/${DBK}/${CGC}/${Name}/\\{${DownloadFiles}\\}" \
+    -o "${OUTDIR}/${Name}/downloads/#1"
+
+  #concurrent "${CCArgs2[@]}"
 }
 
 # Return 1 if key is invalid
@@ -209,42 +207,12 @@ GoogleCode::Issues.attachment() {
   local -r IssueNum="${2}"
   local -r Name="${1}"
 
-  Directory::Create "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}"
-
   curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ATBK}/${Name}/issue-${IssueNum}/comment-${IssueCommentNum}/${File}" \
     -o "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${File}"
 
   GoogleCode::InvalidKey.rm \
     "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${File}"
-}
-
-GoogleCode::Issues.issue() {
-  local IssueNum="${2}"
-  local Name="${1}"
-
-  Directory::Create "${OUTDIR}/${Name}/issues/${IssueNum}/"
-
-  curl ${CURL_ARGS[@]} \
-    "${GSAPI}/${ABK}/${CGC}/${Name}/issues/issue-${IssueNum}.json" \
-    -o "${OUTDIR}/${Name}/issues/${IssueNum}/issue-${IssueNum}.json"
-
-  GoogleCode::InvalidKey.rm \
-    "${OUTDIR}/${Name}/issues/${IssueNum}/issue-${IssueNum}.json"
-}
-
-GoogleCode::Issues.page() {
-  local Name="${1}"
-  local PageNum="${2}"
-
-  Directory::Create "${OUTDIR}/${Name}/issues/"
-
-  curl ${CURL_ARGS[@]} \
-    "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-${PageNum}.json" \
-    -o "${OUTDIR}/${Name}/issues/issues-page-${PageNum}.json"
-
-  GoogleCode::InvalidKey.rm \
-    "${OUTDIR}/${Name}/issues/issues-page-${PageNum}.json"
 }
 
 GoogleCode::Issues() {
@@ -257,7 +225,9 @@ GoogleCode::Issues() {
   local -a IssuePagesArray
   local Name="${1}"
   local NumIssues
+  local NumIssuesRange
   local NumPages
+  local NumPagesRange
   local TMPDIR
 
   TMPDIR=`mktemp -d`
@@ -271,22 +241,25 @@ GoogleCode::Issues() {
   NumPages="$(jq -r -c -M '.totalPages' "${TMPDIR}/issues.json")"
 
   Var::Type.integer "${NumIssues}"
+  Var::Type.integer "${NumPages}"
 
-  for i in `seq 1 ${NumIssues}` ; do
-    CCArgs1+=(
-      '-' "fetching issue: ${i}" GoogleCode::Issues.issue "${Name}" "${i}"
-    )
-  done
+  # Curl can't glob [1-1]
+  if [ ${NumPages} -gt 1 ] ; then
+    NumPagesRange="[1-${NumPages}]"
+  fi
 
-  for i in `seq 1 ${NumPages}` ; do
-    CCArgs2+=(
-      '-' "fetching issue page: ${i}" GoogleCode::Issues.page "${Name}" "${i}"
-    )
-  done
+  eval curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-${NumPagesRange:-NumPages}.json" \
+    -o "${OUTDIR}/${Name}/issues/issues-page-#1.json"
 
-  GoogleCode::Step 'fetching issues'
+  # Curl can't glob [1-1]
+  if [ ${NumIssues} -gt 1 ] ; then
+    NumIssuesRange="[1-${NumIssues}]"
+  fi
 
-  concurrent "${CCArgs1[@]}"
+  eval curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/issues/issue-${NumIssuesRange:-NumIssues}.json" \
+    -o "${OUTDIR}/${Name}/issues/#1/issue-#1.json"
 
   GoogleCode::Step 'compiling list of attachments'
 
@@ -325,7 +298,7 @@ GoogleCode::Issues() {
       done
       unset Attachments
     done < <(jq -r -c -M '.[]|.id' "${TMPDIR}/IssueCommentJson")
-  done < <(find "${OUTDIR}/${Name}/issues" -type f -name '*.json')
+  done < <(find "${OUTDIR}/${Name}/issues" -type f -name '*issue-*.json')
 
   GoogleCode::Step 'fetching issue attachements'
 
@@ -337,8 +310,6 @@ GoogleCode::Issues() {
 GoogleCode::Logo() {
   local Name="${1}"
 
-  Directory::Create "${OUTDIR}/${Name}"
-
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/logo.png" \
     -o "${OUTDIR}/${Name}/logo.png"
 
@@ -347,8 +318,6 @@ GoogleCode::Logo() {
 
 GoogleCode::ProjectJson() {
   local -r Name="${1}"
-
-  Directory::Create "${OUTDIR}/${Name}"
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/project.json" \
     -o "${OUTDIR}/${Name}/project.json"
@@ -368,8 +337,6 @@ GoogleCode::Repos() {
   HasSource="$(jq -r -c -M '.hasSource' "${OUTDIR}/${Name}/project.json")"
 
   [ "${HasSource}" == 'true' ] || return 0
-
-  Directory::Create "${OUTDIR}/${Name}/repo/"
 
   GoogleCode::Step 'fetching source code archive'
 
@@ -414,12 +381,12 @@ GoogleCode::RemoveEmpty() {
 
   while read Directory ; do
     if isEmpty "${Directory}" ; then
-      # Don't risk collapsing VCS directories
-      if [[ ! "${Directory}" =~ "${OUTDIR}/${Name}/repo"/* ]] ; then
-        Directories+=("${Directory}")
-      fi
+      Directories+=("${Directory}")
     fi
-  done < <(find "${OUTDIR}/${Name}" -type d)
+  done < <(
+    # Don't risk collapsing VCS directories
+    find "${OUTDIR}/${Name}" -type d -not -path "${OUTDIR}/${Name}/repo/*"
+  )
 
   echo 'Removing empty directories:'
   printf '%s\n' "${Directories[@]}"
@@ -446,7 +413,10 @@ GoogleCode::TarOutput() {
 
   # Before taring check that there is anything to tar and
   # remove any empty directories.
+  GoogleCode::Step 'collapsing empty directories'
   GoogleCode::RemoveEmpty "${Name}" || return 0
+
+  GoogleCode::Step 'tarring output'
 
   # Prevent full directory heirarchy from being included, use
   # a relative path.
@@ -456,7 +426,7 @@ GoogleCode::TarOutput() {
         -9 \
         --compress \
         --extreme \
-        --threads $(Cpu::Logical) \
+        --threads 1 \
         - > "${Name}.tar.xz"
   popd > /dev/null
 
@@ -510,8 +480,6 @@ GoogleCode::Wikis.page() {
   local -r Name="${1}"
   local -r File="${2}"
 
-  Directory::Create "${OUTDIR}/${Name}/wikis/$(dirname "${File}" | sed -e 's/^.//')"
-
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}" \
     -o "${OUTDIR}/${Name}/wikis/${File}"
 
@@ -541,7 +509,6 @@ GoogleCode::Project() {
   GoogleCode::Step 'checking for wikis'
   GoogleCode::Wikis "${Name}"
 
-  GoogleCode::Step 'tarring output'
   GoogleCode::TarOutput "${Name}"
 }
 
