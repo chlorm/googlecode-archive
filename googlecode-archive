@@ -177,7 +177,10 @@ GoogleCode::Downloads() {
     while read DownloadFile; do
       DownloadFiles="${DownloadFiles}${DownloadFiles:+,}${DownloadFile}"
     done < <(jq -r -c -M '.downloads[].filename' "${DownloadPageFile}")
-  done < <(find "${OUTDIR}/${Name}/downloads-pages" -type f -name '*downloads-page*.json')
+  done < <(
+    find "${OUTDIR}/${Name}/downloads-pages" -type f \
+      -name '*downloads-page*.json'
+  )
 
   GoogleCode::Step 'fetching downloads'
 
@@ -285,7 +288,9 @@ GoogleCode::Issues() {
 
       while read IssueAttachmentFile; do
         Attachments+=("${IssueAttachmentFile}")
-      done < <(jq -r -c -M '.[]|.fileName' "${OUTDIR}/${Name}/IssueAttachmentsJson")
+      done < <(
+        jq -r -c -M '.[]|.fileName' "${OUTDIR}/${Name}/IssueAttachmentsJson"
+      )
 
       for Attachment in "${Attachments[@]}"; do
         CCArgs+=(
@@ -369,7 +374,7 @@ GoogleCode::RemoveEmpty() {
   OutDirSize=$(sizeOf "${OUTDIR}/${Name}")
   ProjectJsonSize=$(sizeOf "${OUTDIR}/${Name}/project.json")
   TotalBytes=$(( ${OutDirSize} - ${ProjectJsonSize} ${IconSize:+- ${IconSize}} ))
-  # If the total number of bytes after subtracting logo,png & project.json
+  # If the total number of bytes after subtracting logo.png & project.json
   # is less than 200 assume the project is empty an don't archive it.
   [ ${TotalBytes} -lt 200 ] && {
     Directory::Remove "${OUTDIR}/${Name}"
