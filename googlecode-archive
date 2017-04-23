@@ -104,29 +104,27 @@ CURL_ARGS=(
 GoogleCode::CommitsPages() {
   local -r Name="${1}"
   local -i NumPages
-  local TMPDIR
-
-  TMPDIR=`mktemp -d`
 
   Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-1.json"
   eval curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-1.json" \
-    -o "${TMPDIR}/commits-page-1.json"
+    -o "${OUTDIR}/${Name}/commits-pages/commits-page-1.json"
 
-  NumPages="$(jq -r -c -M '.TotalPages' "${TMPDIR}/commits-page-1.json")"
+  NumPages="$(
+    jq -r -c -M '.TotalPages' \
+      "${OUTDIR}/${Name}/commits-pages/commits-page-1.json"
+  )"
 
   Var::Type.integer "${NumPages}"
 
   # Curl can't glob [1-1]
   if [ ${NumPages} -gt 1 ] ; then
-    NumPagesRange="[1-${NumPages}]"
+    Log::Message 'info' \
+      "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-[2-${NumPages}].json"
+    eval curl ${CURL_ARGS[@]} \
+      "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-[2-${NumPages}].json" \
+      -o "${OUTDIR}/${Name}/commits-pages/commits-page-#1.json"
   fi
-
-  Log::Message 'info' \
-    "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-${NumPagesRange:-NumPages}.json"
-  eval curl ${CURL_ARGS[@]} \
-    "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-${NumPagesRange:-NumPages}.json" \
-    -o "${OUTDIR}/${Name}/commits-pages/commits-page-#1.json"
 }
 
 GoogleCode::Downloads.file() {
@@ -144,7 +142,7 @@ GoogleCode::Downloads.pages() {
 
   curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-${DownloadPageNum}.json" \
-    -o "${OUTDIR}/${Name}/downloads/downloads-page-${DownloadPageNum}.json"
+    -o "${OUTDIR}/${Name}/downloads-pages/downloads-page-${DownloadPageNum}.json"
 }
 
 # TODO: vailidate download against provided sha1 hash
@@ -154,40 +152,42 @@ GoogleCode::Downloads() {
   local DownloadFiles
   local DownloadPages
   local Name="${1}"
-  local TMPDIR
-
-  TMPDIR=`mktemp -d`
 
   Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-1.json"
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-1.json" \
-    -o "${TMPDIR}/downloads-page-1.json"
+    -o "${OUTDIR}/${Name}/downloads-pages/downloads-page-1.json" || :
 
-  if [ ! -f "${TMPDIR}/downloads-page-1.json" ] ; then
+  if [ ! -f "${OUTDIR}/${Name}/downloads-pages/downloads-page-1.json" ] ; then
     Log::Message 'info' 'project has no downloads'
     return 0
   fi
 
-  DownloadPages="$(jq -r -c -M '.totalPages' "${TMPDIR}/downloads-page-1.json")"
+  DownloadPages="$(
+    jq -r -c -M '.totalPages' \
+      "${OUTDIR}/${Name}/downloads-pages/downloads-page-1.json"
+  )"
 
-  for i in `seq 1 ${DownloadPages}` ; do
-    CCArgs+=(
-      '-'
-      "fetching: downloads-page-${i}.json"
-      GoogleCode::Downloads.pages
-        "${Name}"
-        "${i}"
-    )
-  done
+  if [ ${DownloadPages} -gt 1 ]; then
+    for i in {2..${DownloadPages}} ; do
+      CCArgs+=(
+        '-'
+        "fetching: downloads-page-${i}.json"
+        GoogleCode::Downloads.pages
+          "${Name}"
+          "${i}"
+      )
+    done
 
-  GoogleCode::Step 'fetching download pages'
+    GoogleCode::Step 'fetching download pages'
 
-  concurrent "${CCArgs[@]}"
+    concurrent "${CCArgs[@]}"
+  fi
 
   while read DownloadPageFile ; do
     while read DownloadFile ; do
       DownloadFiles="${DownloadFiles}${DownloadFiles:+,}${DownloadFile}"
     done < <(jq -r -c -M '.downloads[].filename' "${DownloadPageFile}")
-  done < <(find "${OUTDIR}/${Name}/downloads" -type f -name '*downloads-page*.json')
+  done < <(find "${OUTDIR}/${Name}/downloads-pages" -type f -name '*downloads-page*.json')
 
   GoogleCode::Step 'fetching downloads'
 
@@ -233,39 +233,38 @@ GoogleCode::Issues() {
   local NumIssuesRange
   local NumPages
   local NumPagesRange
-  local TMPDIR
-
-  TMPDIR=`mktemp -d`
 
   Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-1.json"
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-1.json" \
-    -o "${TMPDIR}/issues.json"
+    -o "${OUTDIR}/${Name}/issues-pages/issues-page-1.json" || :
 
-  if [ ! -f "${TMPDIR}/issues.json" ] ; then
+  if [ ! -f "${OUTDIR}/${Name}/issues-pages/issues-page-1.json" ] ; then
     Log::Message 'info' 'project contains no issues'
     return 0
   fi
 
-  NumIssues="$(jq -r -c -M 'first(.issues[].id)' "${TMPDIR}/issues.json")"
-  NumPages="$(jq -r -c -M '.totalPages' "${TMPDIR}/issues.json")"
+  NumIssues="$(
+    jq -r -c -M 'first(.issues[].id)' \
+      "${OUTDIR}/${Name}/issues-pages/issues-page-1.json"
+  )"
+  NumPages="$(
+    jq -r -c -M '.totalPages' \
+      "${OUTDIR}/${Name}/issues-pages/issues-page-1.json"
+  )"
 
   Var::Type.integer "${NumIssues}"
   Var::Type.integer "${NumPages}"
 
-  # Curl can't glob [1-1]
   if [ ${NumPages} -gt 1 ] ; then
-    NumPagesRange="[1-${NumPages}]"
+    eval curl ${CURL_ARGS[@]} \
+      "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-[2-${NumPages}].json" \
+      -o "${OUTDIR}/${Name}/issues-pages/issues-page-#1.json"
   fi
-
-  eval curl ${CURL_ARGS[@]} \
-    "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-${NumPagesRange:-NumPages}.json" \
-    -o "${OUTDIR}/${Name}/issues/issues-page-#1.json"
 
   # Curl can't glob [1-1]
   if [ ${NumIssues} -gt 1 ] ; then
     NumIssuesRange="[1-${NumIssues}]"
   fi
-
   eval curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ABK}/${CGC}/${Name}/issues/issue-${NumIssuesRange:-NumIssues}.json" \
     -o "${OUTDIR}/${Name}/issues/#1/issue-#1.json"
@@ -280,18 +279,24 @@ GoogleCode::Issues() {
     IssueNum="$(jq -r -c -M '.id' "${IssueFile}")"
     Var::Type.integer "${IssueNum}"
 
-    jq -r -c -M '.comments' "${IssueFile}" > "${TMPDIR}/IssueCommentJson"
+    if [ -f "${OUTDIR}/${Name}/IssueCommentJson" ]; then
+      rm "${OUTDIR}/${Name}/IssueCommentJson"
+    fi
+    jq -r -c -M '.comments' "${IssueFile}" > "${OUTDIR}/${Name}/IssueCommentJson"
 
     while read IssueCommentNum ; do
       Var::Type.integer "${IssueCommentNum}"
 
+      if [ -f "${OUTDIR}/${Name}/IssueAttachmentsJson" ]; then
+        rm "${OUTDIR}/${Name}/IssueAttachmentsJson"
+      fi
       jq -r -c -M ".[]|select(.id | contains(${IssueCommentNum}))|.attachments" \
-        "${TMPDIR}/IssueCommentJson" > \
-        "${TMPDIR}/IssueAttachmentsJson"
+        "${OUTDIR}/${Name}/IssueCommentJson" > \
+        "${OUTDIR}/${Name}/IssueAttachmentsJson"
 
       while read IssueAttachmentFile ; do
         Attachments+=("${IssueAttachmentFile}")
-      done < <(jq -r -c -M '.[]|.fileName' "${TMPDIR}/IssueAttachmentsJson")
+      done < <(jq -r -c -M '.[]|.fileName' "${OUTDIR}/${Name}/IssueAttachmentsJson")
 
       for Attachment in "${Attachments[@]}" ; do
         CCArgs2+=(
@@ -305,7 +310,7 @@ GoogleCode::Issues() {
         )
       done
       unset Attachments
-    done < <(jq -r -c -M '.[]|.id' "${TMPDIR}/IssueCommentJson")
+    done < <(jq -r -c -M '.[]|.id' "${OUTDIR}/${Name}/IssueCommentJson")
   done < <(grep -r .fileName "${OUTDIR}/${Name}/issues" | awk -F: '{print $1}')
 
   GoogleCode::Step 'fetching issue attachements'
@@ -313,6 +318,13 @@ GoogleCode::Issues() {
   [ ${#CCArgs2[@]} -ge 1 ] || return 0
 
   concurrent "${CCArgs2[@]}"
+
+  if [ -f "${OUTDIR}/${Name}/IssueCommentJson" ]; then
+    rm "${OUTDIR}/${Name}/IssueCommentJson"
+  fi
+  if [ -f "${OUTDIR}/${Name}/IssueAttachmentsJson" ]; then
+    rm "${OUTDIR}/${Name}/IssueAttachmentsJson"
+  fi
 }
 
 GoogleCode::Logo() {
@@ -333,14 +345,13 @@ GoogleCode::ProjectJson() {
 # FIXME: check hasSource from project.json
 GoogleCode::Repos() {
   local -r Name="${1}"
-  local TMPDIR
-
-  TMPDIR=`mktemp -d`
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ASBK}/${CGC}/${Name}/source-archive.zip" \
-    -o "${TMPDIR}/source-archive.zip"
+    -o "${OUTDIR}/${Name}/source-archive.zip"
 
-  unzip -q "${TMPDIR}/source-archive.zip" -d "${OUTDIR}/${Name}/repo/"
+  unzip -q "${OUTDIR}/${Name}/source-archive.zip" -d "${OUTDIR}/${Name}/repo/"
+
+  rm "${OUTDIR}/${Name}/source-archive.zip"
 }
 
 GoogleCode::RemoveEmpty() {
@@ -400,29 +411,26 @@ GoogleCode::RemoveEmpty() {
 GoogleCode::SourcePages() {
   local -r Name="${1}"
   local -i NumPages
-  local TMPDIR
-
-  TMPDIR=`mktemp -d`
 
   Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-1.json"
   eval curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-1.json" \
-    -o "${TMPDIR}/source-page-1.json"
+    -o "${OUTDIR}/${Name}/source-pages/source-page-1.json"
 
-  NumPages="$(jq -r -c -M '.TotalPages' "${TMPDIR}/source-page-1.json")"
+  NumPages="$(
+    jq -r -c -M '.TotalPages' \
+      "${OUTDIR}/${Name}/source-pages/source-page-1.json"
+  )"
 
   Var::Type.integer "${NumPages}"
 
-  # Curl can't glob [1-1]
   if [ ${NumPages} -gt 1 ] ; then
-    NumPagesRange="[1-${NumPages}]"
+    Log::Message 'info' \
+      "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-[2-${NumPages}].json"
+    eval curl ${CURL_ARGS[@]} \
+      "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-[2-${NumPages}].json" \
+      -o "${OUTDIR}/${Name}/source-pages/source-page-#1.json"
   fi
-
-  Log::Message 'info' \
-    "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-${NumPagesRange:-NumPages}.json"
-  eval curl ${CURL_ARGS[@]} \
-    "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-${NumPagesRange:-NumPages}.json" \
-    -o "${OUTDIR}/${Name}/source-pages/source-page-#1.json"
 }
 
 GoogleCode::Step() {
@@ -461,30 +469,27 @@ GoogleCode::TarOutput() {
 GoogleCode::Wikis() {
   local -a CCArgs
   local -r Name="${1}"
-  local TMPDIR
   local WikiFile
   local -a WikiFiles
 
-  TMPDIR=`mktemp -d`
-
   Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json"
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json" \
-    -o "${TMPDIR}/wikis.json"
+    -o "${OUTDIR}/${Name}/wikis.json" || :
 
-  if [ ! -f "${TMPDIR}/wikis.json" ] ; then
+  if [ ! -f "${OUTDIR}/${Name}/wikis.json" ] ; then
     Log::Message 'info' 'project contains no wikis'
     return 0
   fi
 
   # Make sure not to interate over null
-  [ -z "$(cat "${TMPDIR}/wikis.json" |
+  [ -z "$(cat "${OUTDIR}/${Name}/wikis.json" |
           grep -o '{"WikiFiles":null}' || :)" ] || return 0
 
   while read WikiFile ; do
     # Remove leading slash
     WikiFile="$(echo "${WikiFile}" | sed -e 's,^/,,')"
     WikiFiles+=("${WikiFile}")
-  done < <(jq -r '.WikiFiles[]' "${TMPDIR}/wikis.json")
+  done < <(jq -r '.WikiFiles[]' "${OUTDIR}/${Name}/wikis.json")
 
   for i in "${WikiFiles[@]}" ; do
     if [ -n "${i}" ] ; then
