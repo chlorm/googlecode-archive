@@ -146,7 +146,6 @@ GoogleCode::Downloads.pages() {
 
 # TODO: vailidate download against provided sha1 hash
 GoogleCode::Downloads() {
-  local -a CCArgs
   local DownloadFile
   local DownloadFiles
   local -r Name="${1}"
@@ -214,8 +213,7 @@ GoogleCode::Issues.attachment() {
 GoogleCode::Issues() {
   local Attachment
   local -a Attachments
-  local -a CCArgs1
-  local -a CCArgs2
+  local -a CCArgs
   local IssueCommentNum
   local IssueNum
   local -a IssuePagesArray
@@ -290,7 +288,7 @@ GoogleCode::Issues() {
       done < <(jq -r -c -M '.[]|.fileName' "${OUTDIR}/${Name}/IssueAttachmentsJson")
 
       for Attachment in "${Attachments[@]}"; do
-        CCArgs2+=(
+        CCArgs+=(
           '-'
           "fetching issue: ${IssueNum}, comment: ${IssueCommentNum}, attachment: ${Attachment}"
           GoogleCode::Issues.attachment
@@ -306,9 +304,9 @@ GoogleCode::Issues() {
 
   GoogleCode::Step 'fetching issue attachements'
 
-  [ ${#CCArgs2[@]} -ge 1 ] || return 0
+  [ ${#CCArgs[@]} -ge 1 ] || return 0
 
-  concurrent "${CCArgs2[@]}"
+  concurrent "${CCArgs[@]}"
 
   if [ -f "${OUTDIR}/${Name}/IssueCommentJson" ]; then
     rm "${OUTDIR}/${Name}/IssueCommentJson"
@@ -458,7 +456,6 @@ GoogleCode::TarOutput() {
 }
 
 GoogleCode::Wikis() {
-  local -a CCArgs
   local Files
   local -r Name="${1}"
   local WikiFile
