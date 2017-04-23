@@ -194,19 +194,33 @@ GoogleCode::Downloads() {
 
   GoogleCode::Step 'fetching downloads'
 
-  curl ${CURL_ARGS[@]} "${GSAPI}/${DBK}/${CGC}/${Name}/\\{${DownloadFiles}\\}" \
+  Log::Message 'info' "${GSAPI}/${DBK}/${CGC}/${Name}/{${DownloadFiles}}"
+  curl ${CURL_ARGS[@]} "${GSAPI}/${DBK}/${CGC}/${Name}/{${DownloadFiles}}" \
     -o "${OUTDIR}/${Name}/downloads/#1"
 }
 
 GoogleCode::Issues.attachment() {
+  local -i ExitStatus
   local -r File="${4}"
   local -r IssueCommentNum="${3}"
   local -r IssueNum="${2}"
   local -r Name="${1}"
 
+  set +o errexit
+
   curl ${CURL_ARGS[@]} \
     "${GSAPI}/${ATBK}/${Name}/issue-${IssueNum}/comment-${IssueCommentNum}/${File}" \
     -o "${OUTDIR}/${Name}/issues/${IssueNum}/${IssueCommentNum}/${File}"
+  ExitStatus=$?
+
+  set -o errexit
+
+  # Ignore 403 Restrict-View-* failures
+  if [ ${ExitStatus} == 22 ]; then
+    ExitStatus=0
+  fi
+
+  return ${ExitStatus}
 }
 
 GoogleCode::Issues() {
