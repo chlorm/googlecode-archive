@@ -39,10 +39,6 @@
 # xargs
 # xz
 
-# Notes:
-# - Issue pages are only duplicate metadata that can be re-generated
-#   from the issues themselves.
-
 set -o errexit
 set -o pipefail
 
@@ -137,6 +133,7 @@ GoogleCode::Downloads.file() {
   local -r DownloadFile="${2}"
   local -r Name="${1}"
 
+  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/${DownloadFile}"
   curl ${CURL_ARGS[@]} "${GSAPI}/${DBK}/${CGC}/${Name}/${DownloadFile}" \
     -o "${OUTDIR}/${Name}/downloads/${DownloadFile}"
 }
@@ -512,6 +509,7 @@ GoogleCode::Wikis.page() {
   local -r Name="${1}"
   local -r File="${2}"
 
+  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}"
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}" \
     -o "${OUTDIR}/${Name}/wikis/${File}"
 }
