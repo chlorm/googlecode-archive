@@ -271,7 +271,7 @@ GoogleCode::Issues() {
       done
       unset Attachments
     done < <(jq -r -c -M '.[]|.id' "${TMPDIR}/IssueCommentJson")
-  done < <(find "${OUTDIR}/${Name}/issues" -type f -name '*issue-*.json')
+  done < <(grep -r .fileName "${OUTDIR}/${Name}/issues" | awk -F: '{print $1}')
 
   GoogleCode::Step 'fetching issue attachements'
 
