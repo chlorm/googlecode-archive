@@ -105,6 +105,34 @@ CURL_ARGS=(
   '--fail'
 )
 
+GoogleCode::CommitsPages() {
+  local -r Name="${1}"
+  local -i NumPages
+  local TMPDIR
+
+  TMPDIR=`mktemp -d`
+
+  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-1.json"
+  eval curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-1.json" \
+    -o "${TMPDIR}/commits-page-1.json"
+
+  NumPages="$(jq -r -c -M '.TotalPages' "${TMPDIR}/commits-page-1.json")"
+
+  Var::Type.integer "${NumPages}"
+
+  # Curl can't glob [1-1]
+  if [ ${NumPages} -gt 1 ] ; then
+    NumPagesRange="[1-${NumPages}]"
+  fi
+
+  Log::Message 'info' \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-${NumPagesRange:-NumPages}.json"
+  eval curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-${NumPagesRange:-NumPages}.json" \
+    -o "${OUTDIR}/${Name}/commits-pages/commits-page-#1.json"
+}
+
 GoogleCode::Downloads.file() {
   local -r DownloadFile="${2}"
   local -r Name="${1}"
@@ -294,16 +322,9 @@ GoogleCode::ProjectJson() {
 # FIXME: check hasSource from project.json
 GoogleCode::Repos() {
   local -r Name="${1}"
-  local HasSource
   local TMPDIR
 
   TMPDIR=`mktemp -d`
-
-  HasSource="$(jq -r -c -M '.hasSource' "${OUTDIR}/${Name}/project.json")"
-
-  [ "${HasSource}" == 'true' ] || return 0
-
-  GoogleCode::Step 'fetching source code archive'
 
   curl ${CURL_ARGS[@]} "${GSAPI}/${ASBK}/${CGC}/${Name}/source-archive.zip" \
     -o "${TMPDIR}/source-archive.zip"
@@ -363,6 +384,34 @@ GoogleCode::RemoveEmpty() {
     xargs rm -rf
 
   return 0
+}
+
+GoogleCode::SourcePages() {
+  local -r Name="${1}"
+  local -i NumPages
+  local TMPDIR
+
+  TMPDIR=`mktemp -d`
+
+  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-1.json"
+  eval curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-1.json" \
+    -o "${TMPDIR}/source-page-1.json"
+
+  NumPages="$(jq -r -c -M '.TotalPages' "${TMPDIR}/source-page-1.json")"
+
+  Var::Type.integer "${NumPages}"
+
+  # Curl can't glob [1-1]
+  if [ ${NumPages} -gt 1 ] ; then
+    NumPagesRange="[1-${NumPages}]"
+  fi
+
+  Log::Message 'info' \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-${NumPagesRange:-NumPages}.json"
+  eval curl ${CURL_ARGS[@]} \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-${NumPagesRange:-NumPages}.json" \
+    -o "${OUTDIR}/${Name}/source-pages/source-page-#1.json"
 }
 
 GoogleCode::Step() {
@@ -455,6 +504,7 @@ GoogleCode::Wikis.page() {
 
 GoogleCode::Project() {
   local -r Name="${1}"
+  local HasSource
 
   # Incase file were left from a previous run remove them to prevent
   # unwanted files.
@@ -471,7 +521,17 @@ GoogleCode::Project() {
   GoogleCode::Step 'fetching logo'
   GoogleCode::Logo "${Name}" || return 1
 
-  GoogleCode::Repos "${Name}" || return 1
+  HasSource="$(jq -r -c -M '.hasSource' "${OUTDIR}/${Name}/project.json")"
+  if [ "${HasSource}" == 'true' ]; then
+    GoogleCode::Step 'fetching commits pages'
+    GoogleCode::CommitsPages "${Name}" || return 1
+
+    GoogleCode::Step 'fetching source pages'
+    GoogleCode::SourcePages "${Name}" || return 1
+
+    GoogleCode::Step 'fetching source code archive'
+    GoogleCode::Repos "${Name}" || return 1
+  fi
 
   GoogleCode::Step 'checking for wikis'
   GoogleCode::Wikis "${Name}" || return 1
