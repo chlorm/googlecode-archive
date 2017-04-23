@@ -70,9 +70,9 @@ declare -r ASBK='google-code-archive-source'
 declare -r ATBK='google-code-attachments'
 declare -r DBK='google-code-archive-downloads'
 # API
-# 'v2/apache-extras.org'
-# 'v2/eclipselabs.org'
-declare -r CGC="${API:-v2/code.google.com}"
+# 'apache-extras.org'
+# 'eclipselabs.org'
+declare -r CGC="v2/${API:-code.google.com}"
 
 declare -r OUTDIRDEFAULT=`pwd`
 declare -r OUTDIR="${OUTDIR:-${OUTDIRDEFAULT}}"
