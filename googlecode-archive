@@ -42,10 +42,6 @@
 # Notes:
 # - Issue pages are only duplicate metadata that can be re-generated
 #   from the issues themselves.
-# - There are cases where files (such as attachments) are listed in
-#   various json metadata files, however the may not exist in the
-#   googlecode archive.  They may have been removed before googlecode
-#   became read only, but I don't know for sure.
 
 set -o errexit
 set -o pipefail
