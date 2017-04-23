@@ -47,7 +47,7 @@
 #   googlecode archive.  They may have been removed before googlecode
 #   became read only, but I don't know for sure.
 
-
+set -o errexit
 set -o pipefail
 
 LIB_BASH="$(
@@ -202,6 +202,7 @@ GoogleCode::Issues() {
 
   TMPDIR=`mktemp -d`
 
+  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-1.json"
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-1.json" \
     -o "${TMPDIR}/issues.json"
 
@@ -461,36 +462,38 @@ GoogleCode::Project() {
 
   # Incase file were left from a previous run remove them to prevent
   # unwanted files.
-  Directory::Remove "${OUTDIR}/${Name}"
+  Directory::Remove "${OUTDIR}/${Name}" || return 1
 
-  GoogleCode::ProjectJson "${Name}"
+  GoogleCode::ProjectJson "${Name}" || return 1
 
   GoogleCode::Step "checking for downloads"
-  GoogleCode::Downloads "${Name}"
+  GoogleCode::Downloads "${Name}" || return 1
 
   GoogleCode::Step "checking for issues"
-  GoogleCode::Issues "${Name}"
+  GoogleCode::Issues "${Name}" || return 1
 
   GoogleCode::Step 'fetching logo'
-  GoogleCode::Logo "${Name}"
+  GoogleCode::Logo "${Name}" || return 1
 
-  GoogleCode::Repos "${Name}"
+  GoogleCode::Repos "${Name}" || return 1
 
   GoogleCode::Step 'checking for wikis'
-  GoogleCode::Wikis "${Name}"
+  GoogleCode::Wikis "${Name}" || return 1
 
-  GoogleCode::TarOutput "${Name}"
+  GoogleCode::TarOutput "${Name}" || return 1
 }
 
 GoogleCode::Main() {
   local -r Name="${1}"
+  local -i Try=1
 
   # TCP connections could be dropped and it isn't worth implementing
   # detection for this, so loop until the program succeeds.
-  while [ true ] ; do
-    GoogleCode::Project "${Name}" && {
-      false
+  while [ ${Try} -eq 1 ] ; do
+    GoogleCode::Project "${Name}" || {
+      continue
     }
+    Try=0
   done
 
   return 0
