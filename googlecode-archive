@@ -255,7 +255,7 @@ GoogleCode::Issues() {
     NumIssuesRange="[1-${NumIssues}]"
   fi
   eval curl ${CURL_ARGS[@]} \
-    "${GSAPI}/${ABK}/${CGC}/${Name}/issues/issue-${NumIssuesRange:-NumIssues}.json" \
+    "${GSAPI}/${ABK}/${CGC}/${Name}/issues/issue-${NumIssuesRange:-$NumIssues}.json" \
     -o "${OUTDIR}/${Name}/issues/#1/issue-#1.json"
 
   GoogleCode::Step 'compiling list of attachments'
