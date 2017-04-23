@@ -459,6 +459,7 @@ GoogleCode::TarOutput() {
 
 GoogleCode::Wikis() {
   local -a CCArgs
+  local Files
   local -r Name="${1}"
   local WikiFile
   local -a WikiFiles
@@ -482,32 +483,16 @@ GoogleCode::Wikis() {
     WikiFiles+=("${WikiFile}")
   done < <(jq -r '.WikiFiles[]' "${OUTDIR}/${Name}/wikis.json")
 
-  for i in "${WikiFiles[@]}"; do
-    if [ -n "${i}" ]; then
-      CCArgs+=(
-        '-'
-        "fetching wiki page: ${i}"
-        GoogleCode::Wikis.page
-          "${Name}"
-          "${i}"
-      )
-    fi
+  [ -n "${WikiFiles[*]}" ] || return 0
+
+  for WikiFile in "${WikiFiles[@]}"; do
+    Files+="${Files}${WikiFile:+,}${WikiFile}"
   done
 
-  [ ${#CCArgs[@]} -ge 1 ] || return 0
-
   GoogleCode::Step 'fetching wiki pages'
-
-  concurrent "${CCArgs[@]}"
-}
-
-GoogleCode::Wikis.page() {
-  local -r Name="${1}"
-  local -r File="${2}"
-
-  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}"
-  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/${File}" \
-    -o "${OUTDIR}/${Name}/wikis/${File}"
+  Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/{${Files}}"
+  curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wiki/{${Files}}" \
+    -o "${OUTDIR}/${Name}/wikis/#1"
 }
 
 GoogleCode::Project() {
