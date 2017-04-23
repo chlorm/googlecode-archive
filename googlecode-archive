@@ -52,9 +52,9 @@ LIB_BASH="$(
   )/vendor/lib-bash/src/share/lib-bash/lib.bash"
 )"
 
-if [ -f "${LIB_BASH}" ] ; then
+if [ -f "${LIB_BASH}" ]; then
   source "${LIB_BASH}"
-elif type 'git' > /dev/null ; then
+elif type 'git' > /dev/null; then
   git submodule update --init --recursive
   source "${LIB_BASH}"
 else
@@ -117,8 +117,7 @@ GoogleCode::CommitsPages() {
 
   Var::Type.integer "${NumPages}"
 
-  # Curl can't glob [1-1]
-  if [ ${NumPages} -gt 1 ] ; then
+  if [ ${NumPages} -gt 1 ]; then
     Log::Message 'info' \
       "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-[2-${NumPages}].json"
     eval curl ${CURL_ARGS[@]} \
@@ -150,14 +149,14 @@ GoogleCode::Downloads() {
   local -a CCArgs
   local DownloadFile
   local DownloadFiles
-  local DownloadPages
-  local Name="${1}"
+  local -r Name="${1}"
+  local NumPages
 
   Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-1.json"
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/downloads-page-1.json" \
     -o "${OUTDIR}/${Name}/downloads-pages/downloads-page-1.json" || :
 
-  if [ ! -f "${OUTDIR}/${Name}/downloads-pages/downloads-page-1.json" ] ; then
+  if [ ! -f "${OUTDIR}/${Name}/downloads-pages/downloads-page-1.json" ]; then
     Log::Message 'info' 'project has no downloads'
     return 0
   fi
@@ -167,7 +166,7 @@ GoogleCode::Downloads() {
       "${OUTDIR}/${Name}/downloads-pages/downloads-page-1.json"
   )"
 
-  if [ ${NumPages} -gt 1 ] ; then
+  if [ ${NumPages} -gt 1 ]; then
     Log::Message 'info' \
       "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-[2-${NumPages}].json"
     curl ${CURL_ARGS[@]} \
@@ -175,8 +174,8 @@ GoogleCode::Downloads() {
       -o "${OUTDIR}/${Name}/downloads-pages/downloads-page-#1.json"
   fi
 
-  while read DownloadPageFile ; do
-    while read DownloadFile ; do
+  while read DownloadPageFile; do
+    while read DownloadFile; do
       DownloadFiles="${DownloadFiles}${DownloadFiles:+,}${DownloadFile}"
     done < <(jq -r -c -M '.downloads[].filename' "${DownloadPageFile}")
   done < <(find "${OUTDIR}/${Name}/downloads-pages" -type f -name '*downloads-page*.json')
@@ -230,7 +229,7 @@ GoogleCode::Issues() {
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-1.json" \
     -o "${OUTDIR}/${Name}/issues-pages/issues-page-1.json" || :
 
-  if [ ! -f "${OUTDIR}/${Name}/issues-pages/issues-page-1.json" ] ; then
+  if [ ! -f "${OUTDIR}/${Name}/issues-pages/issues-page-1.json" ]; then
     Log::Message 'info' 'project contains no issues'
     return 0
   fi
@@ -247,14 +246,14 @@ GoogleCode::Issues() {
   Var::Type.integer "${NumIssues}"
   Var::Type.integer "${NumPages}"
 
-  if [ ${NumPages} -gt 1 ] ; then
+  if [ ${NumPages} -gt 1 ]; then
     eval curl ${CURL_ARGS[@]} \
       "${GSAPI}/${ABK}/${CGC}/${Name}/issues-page-[2-${NumPages}].json" \
       -o "${OUTDIR}/${Name}/issues-pages/issues-page-#1.json"
   fi
 
   # Curl can't glob [1-1]
-  if [ ${NumIssues} -gt 1 ] ; then
+  if [ ${NumIssues} -gt 1 ]; then
     NumIssuesRange="[1-${NumIssues}]"
   fi
   eval curl ${CURL_ARGS[@]} \
@@ -263,8 +262,8 @@ GoogleCode::Issues() {
 
   GoogleCode::Step 'compiling list of attachments'
 
-  while read IssueFile ; do
-    if [ ! -f "${IssueFile}" ] ; then
+  while read IssueFile; do
+    if [ ! -f "${IssueFile}" ]; then
       continue
     fi
 
@@ -276,7 +275,7 @@ GoogleCode::Issues() {
     fi
     jq -r -c -M '.comments' "${IssueFile}" > "${OUTDIR}/${Name}/IssueCommentJson"
 
-    while read IssueCommentNum ; do
+    while read IssueCommentNum; do
       Var::Type.integer "${IssueCommentNum}"
 
       if [ -f "${OUTDIR}/${Name}/IssueAttachmentsJson" ]; then
@@ -286,11 +285,11 @@ GoogleCode::Issues() {
         "${OUTDIR}/${Name}/IssueCommentJson" > \
         "${OUTDIR}/${Name}/IssueAttachmentsJson"
 
-      while read IssueAttachmentFile ; do
+      while read IssueAttachmentFile; do
         Attachments+=("${IssueAttachmentFile}")
       done < <(jq -r -c -M '.[]|.fileName' "${OUTDIR}/${Name}/IssueAttachmentsJson")
 
-      for Attachment in "${Attachments[@]}" ; do
+      for Attachment in "${Attachments[@]}"; do
         CCArgs2+=(
           '-'
           "fetching issue: ${IssueNum}, comment: ${IssueCommentNum}, attachment: ${Attachment}"
@@ -366,7 +365,7 @@ GoogleCode::RemoveEmpty() {
     return 1
   }
 
-  if [ -f "${OUTDIR}/${Name}/logo.png" ] ; then
+  if [ -f "${OUTDIR}/${Name}/logo.png" ]; then
     IconSize=$(sizeOf "${OUTDIR}/${Name}/logo.png")
   fi
   OutDirSize=$(sizeOf "${OUTDIR}/${Name}")
@@ -379,8 +378,8 @@ GoogleCode::RemoveEmpty() {
     return 1
   }
 
-  while read Directory ; do
-    if isEmpty "${Directory}" ; then
+  while read Directory; do
+    if isEmpty "${Directory}"; then
       Directories+=("${Directory}")
     fi
   done < <(
@@ -416,7 +415,7 @@ GoogleCode::SourcePages() {
 
   Var::Type.integer "${NumPages}"
 
-  if [ ${NumPages} -gt 1 ] ; then
+  if [ ${NumPages} -gt 1 ]; then
     Log::Message 'info' \
       "${GSAPI}/${ABK}/${CGC}/${Name}/source-page-[2-${NumPages}].json"
     eval curl ${CURL_ARGS[@]} \
@@ -468,7 +467,7 @@ GoogleCode::Wikis() {
   curl ${CURL_ARGS[@]} "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json" \
     -o "${OUTDIR}/${Name}/wikis.json" || :
 
-  if [ ! -f "${OUTDIR}/${Name}/wikis.json" ] ; then
+  if [ ! -f "${OUTDIR}/${Name}/wikis.json" ]; then
     Log::Message 'info' 'project contains no wikis'
     return 0
   fi
@@ -477,14 +476,14 @@ GoogleCode::Wikis() {
   [ -z "$(cat "${OUTDIR}/${Name}/wikis.json" |
           grep -o '{"WikiFiles":null}' || :)" ] || return 0
 
-  while read WikiFile ; do
+  while read WikiFile; do
     # Remove leading slash
     WikiFile="$(echo "${WikiFile}" | sed -e 's,^/,,')"
     WikiFiles+=("${WikiFile}")
   done < <(jq -r '.WikiFiles[]' "${OUTDIR}/${Name}/wikis.json")
 
-  for i in "${WikiFiles[@]}" ; do
-    if [ -n "${i}" ] ; then
+  for i in "${WikiFiles[@]}"; do
+    if [ -n "${i}" ]; then
       CCArgs+=(
         '-'
         "fetching wiki page: ${i}"
@@ -554,7 +553,7 @@ GoogleCode::Main() {
 
   # TCP connections could be dropped and it isn't worth implementing
   # detection for this, so loop until the program succeeds.
-  while [ ${Try} -eq 1 ] ; do
+  while [ ${Try} -eq 1 ]; do
     GoogleCode::Project "${Name}" || {
       continue
     }
@@ -564,7 +563,7 @@ GoogleCode::Main() {
   return 0
 }
 
-if [ -f "${1}" ] ; then
+if [ -f "${1}" ]; then
   # TODO: support reading in file
   :
 else
