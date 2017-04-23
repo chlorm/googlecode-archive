@@ -162,25 +162,17 @@ GoogleCode::Downloads() {
     return 0
   fi
 
-  DownloadPages="$(
+  NumPages="$(
     jq -r -c -M '.totalPages' \
       "${OUTDIR}/${Name}/downloads-pages/downloads-page-1.json"
   )"
 
-  if [ ${DownloadPages} -gt 1 ]; then
-    for i in {2..${DownloadPages}} ; do
-      CCArgs+=(
-        '-'
-        "fetching: downloads-page-${i}.json"
-        GoogleCode::Downloads.pages
-          "${Name}"
-          "${i}"
-      )
-    done
-
-    GoogleCode::Step 'fetching download pages'
-
-    concurrent "${CCArgs[@]}"
+  if [ ${NumPages} -gt 1 ] ; then
+    Log::Message 'info' \
+      "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-[2-${NumPages}].json"
+    curl ${CURL_ARGS[@]} \
+      "${GSAPI}/${ABK}/${CGC}/${Name}/commits-page-[2-${NumPages}].json" \
+      -o "${OUTDIR}/${Name}/downloads-pages/downloads-page-#1.json"
   fi
 
   while read DownloadPageFile ; do
