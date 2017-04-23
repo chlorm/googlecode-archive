@@ -31,7 +31,7 @@
 # Dependencies:
 # bash >=4.2
 # coreutils
-# curl >=7.49.0 w/ OpenSSL & HTTP2
+# curl >=7.52.0 w/ OpenSSL & HTTP2
 # grep
 # jq
 # tar
