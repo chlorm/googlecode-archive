@@ -463,7 +463,8 @@ GoogleCode::TarOutput() {
 GoogleCode::Wikis() {
   local Files
   local -r Name="${1}"
-  local WikiFile
+  local WikiFile1
+  local WikiFile2
   local -a WikiFiles
 
   Log::Message 'info' "${GSAPI}/${ABK}/${CGC}/${Name}/wikis.json"
@@ -479,16 +480,16 @@ GoogleCode::Wikis() {
   [ -z "$(cat "${OUTDIR}/${Name}/wikis.json" |
           grep -o '{"WikiFiles":null}' || :)" ] || return 0
 
-  while read WikiFile; do
+  while read WikiFile1; do
     # Remove leading slash
-    WikiFile="$(echo "${WikiFile}" | sed -e 's,^/,,')"
-    WikiFiles+=("${WikiFile}")
+    WikiFile1="$(echo "${WikiFile1}" | sed -e 's,^/,,')"
+    WikiFiles+=("${WikiFile1}")
   done < <(jq -r '.WikiFiles[]' "${OUTDIR}/${Name}/wikis.json")
 
   [ -n "${WikiFiles[*]}" ] || return 0
 
-  for WikiFile in "${WikiFiles[@]}"; do
-    Files+="${Files}${WikiFile:+,}${WikiFile}"
+  for WikiFile2 in "${WikiFiles[@]}"; do
+    Files+="${Files:+,}${WikiFile2}"
   done
 
   GoogleCode::Step 'fetching wiki pages'
